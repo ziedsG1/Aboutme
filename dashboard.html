@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AboutMe | Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+  <style>
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    #status-msg {
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    .success { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .error { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+  </style>
+</head>
+<body>
+  <!-- Subdued 3D Background -->
+  <div id="canvas-container" style="opacity: 0.3;"></div>
+
+  <nav>
+    <a href="index.html" class="brand">AboutMe</a>
+    <ul id="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="profile.html" id="my-profile-link">My Profile</a></li>
+      <li><button id="logout-btn" class="btn btn-outline" style="padding: 0.5rem 1rem;">Log Out</button></li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    <div class="glass-panel animate-fade-in">
+      <h2>Welcome, <span id="user-email-display">Photographer</span>!</h2>
+      <p>Manage your 3D portfolio and information below.</p>
+      
+      <div id="status-msg"></div>
+
+      <div class="dashboard-grid">
+        <div>
+          <h3>Profile Settings</h3>
+          <p class="text-muted" style="font-size: 0.9rem;">Update how you appear to the world.</p>
+        </div>
+        
+        <div>
+          <form id="profile-form">
+            <div class="form-group">
+              <label for="username">Username (@)</label>
+              <input type="text" id="username" placeholder="e.g. johndoe">
+            </div>
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+              <span id="verification-status" style="display: inline-block; padding: 0.5rem 1rem; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 0.9rem;">
+                Status: Pending Verification
+              </span>
+            </div>
+            <div class="form-group">
+              <label for="displayName">Display Name</label>
+              <input type="text" id="displayName" placeholder="e.g. John Doe Photography">
+            </div>
+            <div class="form-group">
+              <label for="bio">Bio</label>
+              <textarea id="bio" rows="4" placeholder="Tell the world about your style and vision..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="themeColor">Theme Color (Hex)</label>
+              <input type="text" id="themeColor" placeholder="#ec4899">
+            </div>
+            <button type="submit" class="btn" id="save-btn">Save Profile</button>
+          </form>
+        </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 3rem;">
+        <h3>Portfolio Photos</h3>
+        <p class="text-muted" style="font-size: 0.9rem; margin-bottom: 1rem;">Upload your best work to showcase on your 3D profile.</p>
+        
+        <div style="margin-bottom: 2rem;">
+          <input type="file" id="photo-upload" accept="image/*" style="display: none;" />
+          <button class="btn btn-outline" id="upload-btn-trigger">Upload Photo</button>
+          <span id="upload-status" style="margin-left: 1rem; color: var(--text-muted);"></span>
+        </div>
+
+        <div id="photos-grid" class="gallery-grid">
+          <p class="text-muted">Loading photos...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+      }
+    }
+  </script>
+
+  <script type="module" src="js/supabase-config.js"></script>
+  <script type="module" src="js/three-scene.js"></script>
+  
+  <script type="module">
+    import { supabase } from './js/supabase-config.js';
+
+    let currentUser = null;
+
+    // Elements
+    const userEmailDisplay = document.getElementById('user-email-display');
+    const profileForm = document.getElementById('profile-form');
+    const statusMsg = document.getElementById('status-msg');
+    const myProfileLink = document.getElementById('my-profile-link');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    const showStatus = (msg, type) => {
+      statusMsg.textContent = msg;
+      statusMsg.className = type;
+      statusMsg.style.display = 'block';
+      setTimeout(() => statusMsg.style.display = 'none', 3000);
+    };
+
+    const loadProfile = async (uid) => {
+      try {
+        const { data, error } = await supabase
+          .from('photographers')
+          .select('*')
+          .eq('id', uid)
+          .single();
+        
+        if (data && !error) {
+          document.getElementById('username').value = data.username || '';
+          document.getElementById('displayName').value = data.displayName || '';
+          document.getElementById('bio').value = data.bio || '';
+          document.getElementById('themeColor').value = data.themeColor || '';
+          
+          const vStatus = document.getElementById('verification-status');
+          if (data.is_admin) {
+            vStatus.innerHTML = 'Status: <span style="color: #ef4444;">🔴 Admin Verified</span>';
+          } else if (data.is_verified) {
+            vStatus.innerHTML = 'Status: <span style="color: #3b82f6;">🔵 Verified</span>';
+          } else {
+            vStatus.innerHTML = 'Status: <span style="color: var(--text-muted);">❌ Pending Verification</span>';
+          }
+        }
+      } catch (error) {
+        console.error("Error loading profile:", error);
+      }
+    };
+
+    const handleSession = async (session) => {
+      if (session && session.user) {
+        currentUser = session.user;
+        userEmailDisplay.textContent = currentUser.email;
+        myProfileLink.href = `profile.html?uid=${currentUser.id}`;
+        await loadProfile(currentUser.id);
+        await loadPhotos(currentUser.id);
+      } else {
+        window.location.href = 'login.html';
+      }
+    };
+
+    // Check initial session safely
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        handleSession(session);
+      } catch (e) {
+        console.error(e);
+        window.location.href = 'login.html';
+      }
+    };
+    initAuth();
+
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        window.location.href = 'index.html';
+      } else {
+        handleSession(session);
+      }
+    });
+
+    profileForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentUser) return;
+
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.textContent = 'Saving...';
+      saveBtn.disabled = true;
+
+      const profileData = {
+        id: currentUser.id,
+        username: document.getElementById('username').value.replace('@', '').toLowerCase(),
+        displayName: document.getElementById('displayName').value,
+        bio: document.getElementById('bio').value,
+        themeColor: document.getElementById('themeColor').value,
+        updated_at: new Date().toISOString()
+      };
+
+      try {
+        const { error } = await supabase
+          .from('photographers')
+          .upsert(profileData);
+          
+        if (error) throw error;
+        showStatus('Profile saved successfully!', 'success');
+      } catch (error) {
+        console.error("Error saving profile:", error);
+        showStatus('Error: ' + (error.message || JSON.stringify(error)), 'error');
+      } finally {
+        saveBtn.textContent = 'Save Profile';
+        saveBtn.disabled = false;
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'index.html';
+    });
+
+    // --- Photo Upload Logic ---
+    const photoUploadInput = document.getElementById('photo-upload');
+    const uploadBtnTrigger = document.getElementById('upload-btn-trigger');
+    const uploadStatus = document.getElementById('upload-status');
+    const photosGrid = document.getElementById('photos-grid');
+
+    uploadBtnTrigger.addEventListener('click', () => {
+      photoUploadInput.click();
+    });
+
+    const loadPhotos = async (uid) => {
+      try {
+        const { data, error } = await supabase
+          .from('photos')
+          .select('*')
+          .eq('photographer_id', uid)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        photosGrid.innerHTML = '';
+        if (data && data.length > 0) {
+          data.forEach(photo => {
+            const img = document.createElement('img');
+            img.src = photo.url;
+            img.className = 'gallery-item';
+            photosGrid.appendChild(img);
+          });
+        } else {
+          photosGrid.innerHTML = '<p class="text-muted">No photos uploaded yet.</p>';
+        }
+      } catch (err) {
+        console.error("Error loading photos:", err);
+      }
+    };
+
+    photoUploadInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !currentUser) return;
+
+      uploadStatus.textContent = 'Uploading to Storage...';
+      uploadBtnTrigger.disabled = true;
+      uploadStatus.style.color = 'var(--text-muted)';
+
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        // 1. Upload to Storage
+        const { error: uploadError } = await supabase.storage
+          .from('portfolio')
+          .upload(fileName, file);
+          
+        if (uploadError) throw uploadError;
+
+        // 2. Get Public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('portfolio')
+          .getPublicUrl(fileName);
+
+        // 3. Save URL to Database
+        uploadStatus.textContent = 'Saving to Database...';
+        const { error: dbError } = await supabase
+          .from('photos')
+          .insert({
+            photographer_id: currentUser.id,
+            url: publicUrl
+          });
+
+        if (dbError) throw dbError;
+
+        uploadStatus.textContent = 'Uploaded successfully!';
+        uploadStatus.style.color = '#34d399';
+        
+        loadPhotos(currentUser.id);
+      } catch (err) {
+        console.error("Upload error:", err);
+        uploadStatus.textContent = 'Error: ' + err.message;
+        uploadStatus.style.color = '#f87171';
+      } finally {
+        uploadBtnTrigger.disabled = false;
+        photoUploadInput.value = ''; // Reset input
+      }
+    });
+  </script>
+</body>
+</html>

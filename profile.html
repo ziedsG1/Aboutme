@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AboutMe | Photographer Profile</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+  <style>
+    .profile-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+    .profile-name {
+      font-size: 5rem;
+      background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+    }
+    .profile-bio {
+      font-size: 1.2rem;
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.8;
+    }
+    #loading-state {
+      text-align: center;
+      padding: 5rem;
+      font-size: 1.5rem;
+    }
+    #profile-content {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- The magical 3D scene will run behind the content -->
+  <div id="canvas-container"></div>
+
+  <nav>
+    <a href="index.html" class="brand">AboutMe</a>
+    <ul id="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="profile.html">Discover</a></li>
+      <li><a href="login.html" class="btn btn-outline" id="nav-login-btn">Log In</a></li>
+      <li><button id="nav-logout-btn" class="btn btn-outline" style="padding: 0.5rem 1rem; display: none;">Log Out</button></li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    <div id="loading-state" class="animate-fade-in">
+      <p>Summoning the magical 3D profile...</p>
+    </div>
+
+    <div id="profile-content" class="animate-fade-in">
+      <header class="profile-header">
+        <h1 class="profile-name" id="display-name">Photographer</h1>
+        <div class="glass-panel" style="display: inline-block; margin-top: 2rem;">
+          <p class="profile-bio" id="bio-text">This photographer hasn't set a bio yet.</p>
+        </div>
+      </header>
+
+      <section>
+        <h2 class="text-center" style="margin-top: 4rem;">Portfolio Gallery</h2>
+        <div class="gallery-grid">
+          <!-- Photos will be injected here -->
+        </div>
+      </section>
+
+      <div id="discovery-section" style="display: none; margin-top: 4rem;">
+        <h2 class="text-center" style="margin-bottom: 2rem;">Discover Photographers</h2>
+        <div style="max-width: 500px; margin: 0 auto 3rem;">
+          <input type="text" id="search-input" placeholder="Search by username or name..." style="width: 100%; padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: white; outline: none; font-size: 1.1rem;">
+        </div>
+        <div id="photographers-grid" class="gallery-grid" style="gap: 2rem;"></div>
+      </div>
+    </div>
+  </main>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+      }
+    }
+  </script>
+
+  <script type="module" src="js/supabase-config.js"></script>
+  <script type="module" src="js/three-scene.js"></script>
+  
+  <script type="module">
+    import { supabase } from './js/supabase-config.js';
+
+    const updateNav = (session) => {
+      const loginBtn = document.getElementById('nav-login-btn');
+      const logoutBtn = document.getElementById('nav-logout-btn');
+      if (session) {
+        loginBtn.textContent = 'Dashboard';
+        loginBtn.href = 'dashboard.html';
+        logoutBtn.style.display = 'inline-block';
+      } else {
+        loginBtn.textContent = 'Log In';
+        loginBtn.href = 'login.html';
+        logoutBtn.style.display = 'none';
+      }
+    };
+
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      updateNav(session);
+    };
+    checkAuth();
+
+    supabase.auth.onAuthStateChange((event, session) => {
+      updateNav(session);
+    });
+
+    document.getElementById('nav-logout-btn').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.reload();
+    });
+
+    const getBadge = (isAdmin, isVerified) => {
+      if (isAdmin) return '<span title="Admin Verified" style="color: #ef4444; font-size: 0.8em; margin-left: 0.5rem; vertical-align: middle;">✓</span>';
+      if (isVerified) return '<span title="Verified User" style="color: #3b82f6; font-size: 0.8em; margin-left: 0.5rem; vertical-align: middle;">✓</span>';
+      return '';
+    };
+
+    const loadProfile = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const uid = urlParams.get('uid');
+      
+      const loadingState = document.getElementById('loading-state');
+      const profileContent = document.getElementById('profile-content');
+      const discoverySection = document.getElementById('discovery-section');
+      
+      if (!uid) {
+        // DISCOVERY MODE
+        document.getElementById('display-name').textContent = "Discovery Mode";
+        document.getElementById('bio-text').textContent = "Explore magical 3D portfolios from photographers around the world.";
+        document.querySelector('section').style.display = 'none'; // Hide the user gallery
+        
+        try {
+          const { data: photographers, error } = await supabase
+            .from('photographers')
+            .select('*');
+            
+          if (photographers && !error) {
+            const grid = document.getElementById('photographers-grid');
+            const searchInput = document.getElementById('search-input');
+            
+            const renderGrid = (query) => {
+              grid.innerHTML = '';
+              const lowerQuery = query.toLowerCase();
+              
+              const filtered = photographers.filter(p => {
+                const nameMatch = p.displayName && p.displayName.toLowerCase().includes(lowerQuery);
+                const userMatch = p.username && p.username.toLowerCase().includes(lowerQuery);
+                return nameMatch || userMatch;
+              });
+
+              filtered.forEach(p => {
+                const card = document.createElement('a');
+                card.href = `profile.html?uid=${p.id}`;
+                card.className = 'glass-panel text-center';
+                card.style.display = 'block';
+                card.style.textDecoration = 'none';
+                card.innerHTML = `
+                  <h3 style="color: ${p.themeColor || 'var(--primary-color)'}; margin-bottom: 0.5rem;">
+                    ${p.displayName || 'Unnamed Photographer'}
+                    ${getBadge(p.is_admin, p.is_verified)}
+                  </h3>
+                  ${p.username ? `<p style="color: var(--text-muted); margin-bottom: 1rem;">@${p.username}</p>` : ''}
+                  <p class="text-muted" style="font-size: 0.9rem;">View 3D Portfolio</p>
+                `;
+                grid.appendChild(card);
+              });
+            };
+
+            renderGrid('');
+            
+            searchInput.addEventListener('input', (e) => {
+              renderGrid(e.target.value);
+            });
+            
+            discoverySection.style.display = 'block';
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          loadingState.style.display = 'none';
+          profileContent.style.display = 'block';
+        }
+        return;
+      }
+
+      // PROFILE MODE
+      try {
+        const { data, error } = await supabase
+          .from('photographers')
+          .select('*')
+          .eq('id', uid)
+          .single();
+
+        if (data && !error) {
+          if (data.displayName) {
+            document.getElementById('display-name').innerHTML = `${data.displayName} ${getBadge(data.is_admin, data.is_verified)}`;
+          }
+          if (data.bio) document.getElementById('bio-text').textContent = data.bio;
+          if (data.themeColor) {
+            document.documentElement.style.setProperty('--primary-color', data.themeColor);
+          }
+
+          // Fetch photos
+          const { data: photosData } = await supabase
+            .from('photos')
+            .select('*')
+            .eq('photographer_id', uid)
+            .order('created_at', { ascending: false });
+
+          const galleryGrid = document.querySelector('.gallery-grid');
+          galleryGrid.innerHTML = '';
+          
+          if (photosData && photosData.length > 0) {
+            photosData.forEach(photo => {
+              const img = document.createElement('img');
+              img.src = photo.url;
+              img.className = 'gallery-item';
+              galleryGrid.appendChild(img);
+            });
+          } else {
+            galleryGrid.innerHTML = '<p class="text-muted text-center" style="grid-column: 1 / -1;">This photographer has no photos yet.</p>';
+          }
+
+        } else {
+          document.getElementById('display-name').textContent = "Photographer Not Found";
+          document.getElementById('bio-text').textContent = "This profile does not exist.";
+          document.querySelector('section').style.display = 'none';
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      } finally {
+        loadingState.style.display = 'none';
+        profileContent.style.display = 'block';
+      }
+    };
+
+    // Small delay to let the 3D scene initialize and give a magical entrance
+    setTimeout(loadProfile, 1000);
+  </script>
+</body>
+</html>

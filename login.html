@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AboutMe | Login</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+  <style>
+    .auth-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .auth-panel {
+      width: 100%;
+      max-width: 400px;
+    }
+    .toggle-auth {
+      margin-top: 1rem;
+      text-align: center;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .toggle-auth:hover {
+      color: var(--primary-color);
+    }
+    #error-message {
+      color: #ef4444;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <nav>
+    <a href="index.html" class="brand">AboutMe</a>
+    <ul id="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="profile.html">Discover</a></li>
+    </ul>
+  </nav>
+
+  <main class="auth-container">
+    <div class="glass-panel auth-panel animate-fade-in">
+      <h2 id="form-title" class="text-center">Log In</h2>
+      <div id="error-message"></div>
+      
+      <form id="auth-form">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" required placeholder="photographer@example.com">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn" style="width: 100%;" id="submit-btn">Log In</button>
+      </form>
+      
+      <div class="toggle-auth" id="toggle-btn">
+        Don't have an account? Sign up
+      </div>
+    </div>
+  </main>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+      }
+    }
+  </script>
+
+  <script type="module" src="js/supabase-config.js"></script>
+  <script type="module" src="js/three-scene.js"></script>
+  
+  <script>
+    window.addEventListener('error', (event) => {
+      const errorMsg = document.getElementById('error-message');
+      if(errorMsg) {
+        errorMsg.style.display = 'block';
+        errorMsg.textContent = "Script Error: " + event.message;
+      }
+    });
+  </script>
+  
+  <script type="module">
+    import { supabase } from './js/supabase-config.js';
+    console.log("Supabase imported successfully in login.html");
+
+    const errorMsg = document.getElementById('error-message');
+    const form = document.getElementById('auth-form');
+    const toggleBtn = document.getElementById('toggle-btn');
+    const formTitle = document.getElementById('form-title');
+    const submitBtn = document.getElementById('submit-btn');
+
+    let isLogin = true;
+
+    toggleBtn.addEventListener('click', () => {
+      isLogin = !isLogin;
+      formTitle.textContent = isLogin ? 'Log In' : 'Sign Up';
+      submitBtn.textContent = isLogin ? 'Log In' : 'Sign Up';
+      toggleBtn.textContent = isLogin ? "Don't have an account? Sign up" : "Already have an account? Log in";
+      errorMsg.style.display = 'none';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      
+      try {
+        errorMsg.style.display = 'none';
+        submitBtn.textContent = 'Please wait...';
+        submitBtn.disabled = true;
+
+        let error;
+        if (isLogin) {
+          const res = await supabase.auth.signInWithPassword({ email, password });
+          error = res.error;
+        } else {
+          const res = await supabase.auth.signUp({ email, password });
+          error = res.error;
+          if (!error && res.data.user && res.data.session === null) {
+            throw new Error("Check your email for the confirmation link.");
+          }
+        }
+        
+        if (error) throw error;
+        // Redirect will happen via onAuthStateChange
+      } catch (error) {
+        console.error("Auth error:", error);
+        errorMsg.textContent = error.message;
+        errorMsg.style.display = 'block';
+        submitBtn.textContent = isLogin ? 'Log In' : 'Sign Up';
+        submitBtn.disabled = false;
+      }
+    });
+
+    // Check initial session asynchronously
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          window.location.href = 'dashboard.html';
+        }
+      } catch (e) {
+        console.error("Session check failed", e);
+      }
+    };
+    initAuth();
+
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        window.location.href = 'dashboard.html';
+      }
+    });
+  </script>
+</body>
+</html>
