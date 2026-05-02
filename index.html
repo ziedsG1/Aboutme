@@ -46,10 +46,15 @@
           <li style="margin-bottom: 0.5rem; color: var(--text-muted);">🔒 Secure authentication</li>
         </ul>
       </div>
-      <div style="flex: 1; text-align: right;">
-        <!-- Placeholder for a 3D element or image -->
-        <div style="width: 100%; height: 300px; background: rgba(255,255,255,0.05); border-radius: 16px; border: 1px dashed var(--primary-color); display: flex; align-items: center; justify-content: center;">
-          <span style="color: var(--primary-color);">3D Element Preview</span>
+      <div style="flex: 1; text-align: center;">
+        <div id="slideshow-container" style="width: 100%; height: 350px; position: relative; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s ease;">
+          <a id="slideshow-link" href="#" style="display: block; width: 100%; height: 100%; text-decoration: none;">
+            <img id="slideshow-img" src="" alt="Creator Photo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+            <div id="slideshow-overlay" style="position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 2rem 1rem 1rem; text-align: center; color: white; display: none;">
+              <span id="slideshow-text" style="font-weight: 600; font-size: 1.1rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);"></span>
+            </div>
+            <div id="slideshow-loading" style="color: var(--text-muted);">Loading magical gallery...</div>
+          </a>
         </div>
       </div>
     </div>
@@ -104,6 +109,64 @@
     supabase.auth.onAuthStateChange((event, session) => {
       updateNav(session);
     });
+
+    // Slideshow Logic
+    const initSlideshow = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('photos')
+          .select('url, photographer_id, photographers(displayName, username)')
+          .order('created_at', { ascending: false })
+          .limit(50);
+          
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          // Shuffle photos
+          const photos = data.sort(() => 0.5 - Math.random());
+          
+          const imgEl = document.getElementById('slideshow-img');
+          const textEl = document.getElementById('slideshow-text');
+          const overlayEl = document.getElementById('slideshow-overlay');
+          const linkEl = document.getElementById('slideshow-link');
+          const containerEl = document.getElementById('slideshow-container');
+          document.getElementById('slideshow-loading').style.display = 'none';
+          
+          let currentIndex = 0;
+          
+          const updateSlide = () => {
+            const photo = photos[currentIndex];
+            const creatorName = photo.photographers?.displayName || photo.photographers?.username || 'Unknown Creator';
+            
+            // Fade out
+            containerEl.style.opacity = '0';
+            
+            setTimeout(() => {
+              imgEl.src = photo.url;
+              imgEl.style.display = 'block';
+              textEl.innerHTML = `By <span style="color: var(--secondary-color);">${creatorName}</span>`;
+              overlayEl.style.display = 'block';
+              linkEl.href = `profile.html?uid=${photo.photographer_id}`;
+              
+              // Fade in
+              containerEl.style.opacity = '1';
+              
+              currentIndex = (currentIndex + 1) % photos.length;
+            }, 500); // Wait for fade out to complete
+          };
+          
+          updateSlide(); // Show first slide
+          setInterval(updateSlide, 5000); // Change every 5 seconds
+        } else {
+          document.getElementById('slideshow-loading').textContent = "No photos uploaded yet.";
+        }
+      } catch (err) {
+        console.error("Slideshow error:", err);
+        document.getElementById('slideshow-loading').textContent = "Could not load gallery.";
+      }
+    };
+    
+    initSlideshow();
   </script>
 </body>
 </html>
