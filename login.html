@@ -139,12 +139,13 @@
         let error;
         if (isLogin) {
           const res = await supabase.auth.signInWithPassword({ email, password });
-          error = res.error;
+          if (res.error) throw res.error;
+          window.location.href = 'dashboard.html';
         } else {
           const res = await supabase.auth.signUp({ email, password });
-          error = res.error;
+          if (res.error) throw res.error;
           
-          if (!error && res.data.user) {
+          if (res.data.user) {
             // Save the username immediately into the database
             const usernameVal = document.getElementById('signup-username').value.replace('@', '').toLowerCase();
             if (usernameVal) {
@@ -154,11 +155,9 @@
                 updated_at: new Date().toISOString()
               });
             }
+            window.location.href = 'dashboard.html';
           }
         }
-        
-        if (error) throw error;
-        // Redirect will happen via onAuthStateChange
       } catch (error) {
         console.error("Auth error:", error);
         errorMsg.textContent = error.message;
@@ -180,12 +179,6 @@
       }
     };
     initAuth();
-
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        window.location.href = 'dashboard.html';
-      }
-    });
   </script>
 </body>
 </html>
