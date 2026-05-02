@@ -75,6 +75,12 @@
         </div>
         <div id="photographers-grid" class="gallery-grid" style="gap: 2rem;"></div>
       </div>
+      <div id="lightbox">
+        <span id="lightbox-close">&times;</span>
+        <div id="lightbox-prev" class="lightbox-nav">&#10094;</div>
+        <img id="lightbox-img" src="" alt="Close up view">
+        <div id="lightbox-next" class="lightbox-nav">&#10095;</div>
+      </div>
     </div>
   </main>
 
@@ -127,6 +133,9 @@
       if (isVerified) return '<span title="Verified User" style="color: #3b82f6; font-size: 0.8em; margin-left: 0.5rem; vertical-align: middle;">✓</span>';
       return '';
     };
+
+    let currentGalleryPhotos = [];
+    let currentPhotoIndex = 0;
 
     const loadProfile = async () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -224,10 +233,18 @@
           galleryGrid.innerHTML = '';
           
           if (photosData && photosData.length > 0) {
-            photosData.forEach(photo => {
+            currentGalleryPhotos = photosData;
+            photosData.forEach((photo, index) => {
               const img = document.createElement('img');
               img.src = photo.url;
               img.className = 'gallery-item';
+              img.style.cursor = 'pointer';
+              
+              img.addEventListener('click', () => {
+                currentPhotoIndex = index;
+                openLightbox();
+              });
+              
               galleryGrid.appendChild(img);
             });
           } else {
@@ -249,6 +266,43 @@
 
     // Small delay to let the 3D scene initialize and give a magical entrance
     setTimeout(loadProfile, 1000);
+
+    // Lightbox Global Close & Nav Logic
+    const lightbox = document.getElementById('lightbox');
+    const lightboxClose = document.getElementById('lightbox-close');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const lightboxPrev = document.getElementById('lightbox-prev');
+    const lightboxNext = document.getElementById('lightbox-next');
+    
+    const openLightbox = () => {
+      if (!currentGalleryPhotos[currentPhotoIndex]) return;
+      lightboxImg.src = currentGalleryPhotos[currentPhotoIndex].url;
+      lightbox.classList.add('active');
+    };
+    
+    const navLightbox = (direction) => {
+      if (currentGalleryPhotos.length === 0) return;
+      currentPhotoIndex = (currentPhotoIndex + direction + currentGalleryPhotos.length) % currentGalleryPhotos.length;
+      openLightbox();
+    };
+    
+    if(lightbox) {
+      lightbox.addEventListener('click', (e) => {
+        if (e.target !== lightboxImg && e.target !== lightboxPrev && e.target !== lightboxNext) {
+          lightbox.classList.remove('active');
+        }
+      });
+      lightboxPrev.addEventListener('click', () => navLightbox(-1));
+      lightboxNext.addEventListener('click', () => navLightbox(1));
+      
+      document.addEventListener('keydown', (e) => {
+        if (lightbox.classList.contains('active')) {
+          if (e.key === 'ArrowLeft') navLightbox(-1);
+          if (e.key === 'ArrowRight') navLightbox(1);
+          if (e.key === 'Escape') lightbox.classList.remove('active');
+        }
+      });
+    }
   </script>
 </body>
 </html>
